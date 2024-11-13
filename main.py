@@ -1,14 +1,15 @@
 import asyncio
 import logging
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.utils import executor
-from dotenv import load_dotenv
-import os
+from aiogram.types import Message
+from aiogram import Router
+from aiogram.filters import Command  # Это правильный импорт для фильтра Command
 
-from handlers import router  # Проверьте, что router настроен правильно
+from dotenv import load_dotenv
 
 # Загружаем переменные окружения из .env файла
 load_dotenv()
@@ -16,25 +17,30 @@ load_dotenv()
 # Получаем токен бота
 API_TOKEN = os.getenv('BOT_TOKEN')
 
-# Проверка на наличие токена
-if not API_TOKEN:
-    raise ValueError("Токен бота не найден! Убедитесь, что .env файл содержит правильную переменную BOT_TOKEN.")
-
-# Настроим логирование
-logging.basicConfig(level=logging.INFO)
-
-# Инициализация бота и диспетчера
+# Создаем экземпляр бота и диспетчера
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Убедитесь, что роутер настроен в handlers.py и подключён правильно
+# Подключаем роутер
+router = Router()
+
+# Ваши хендлеры
+@router.message(Command("start"))
+async def start_handler(msg: Message):
+    await msg.answer("Привет, я твой бот!")
+
 dp.include_router(router)
 
 async def main():
-    # Удаляем вебхук (если используете polling, это необязательно)
+    # Убираем webhook, если он был
     await bot.delete_webhook(drop_pending_updates=True)
-    # Начинаем polling
-    await dp.start_polling()
+    
+    # Запускаем polling
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 if __name__ == "__main__":
+    # Настроим логирование
+    logging.basicConfig(level=logging.INFO)
+
+    # Запускаем основной цикл событий
     asyncio.run(main())
