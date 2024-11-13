@@ -29,3 +29,20 @@ direction_menu = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="Комдиз", callback_data="direction_communication")],
     [InlineKeyboardButton(text="Моушен", callback_data="direction_motion")],
 ])
+
+
+# Клавиатура для фильтров
+filter_menu = InlineKeyboardMarkup(inline_keyboard=[
+    [
+        InlineKeyboardButton(text="Тип мероприятия", callback_data="filter_type"),
+        InlineKeyboardButton(text="На этой неделе", callback_data="filter_week"),
+    ],
+    [
+        InlineKeyboardButton(text="В этом месяце", callback_data="filter_month"),
+        InlineKeyboardButton(text="Бесплатные", callback_data="filter_free"),
+    ],
+    [
+        InlineKeyboardButton(text="Онлайн", callback_data="filter_online"),
+        InlineKeyboardButton(text="Применить", callback_data="apply_filters"),
+    ]
+])
