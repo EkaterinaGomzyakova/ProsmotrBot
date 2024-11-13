@@ -5,11 +5,10 @@ import os
 from aiogram import Bot, Dispatcher
 from aiogram.enums.parse_mode import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Message
 from aiogram import Router
-from aiogram.filters import Command  # Это правильный импорт для фильтра Command
 
 from dotenv import load_dotenv
+from handlers import router  # Импортируем роутер из handlers.py
 
 # Загружаем переменные окружения из .env файла
 load_dotenv()
@@ -22,13 +21,6 @@ bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
 # Подключаем роутер
-router = Router()
-
-# Ваши хендлеры
-@router.message(Command("start"))
-async def start_handler(msg: Message):
-    await msg.answer("Привет, я твой бот!")
-
 dp.include_router(router)
 
 async def main():
