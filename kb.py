@@ -7,6 +7,8 @@ main_menu = ReplyKeyboardMarkup(
         [KeyboardButton(text="Настройки")],
         [KeyboardButton(text="Обратная связь")],
         [KeyboardButton(text="Подборки")],
+        [KeyboardButton(text="Предложить мероприятие")],
+        
     ],
     resize_keyboard=True  # Кнопки будут адаптированы по размеру
 )

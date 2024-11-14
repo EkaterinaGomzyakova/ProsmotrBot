@@ -4,6 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.state import State, StatesGroup
 
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup
+
 import kb
 import text
 
@@ -13,10 +15,16 @@ import database
 class Form(StatesGroup):
     waiting_for_city = State()
     waiting_for_direction = State()
+    waiting_for_event_name = State()
+    waiting_for_event_description = State()
+    waiting_for_event_date = State()
+    waiting_for_event_city = State()
 
 class FilterState(StatesGroup):
     choosing_filters = State()
     applying_filters = State()
+    
+    
 
 router = Router()
 
@@ -138,3 +146,66 @@ async def apply_filters(callback_query: CallbackQuery, state: FSMContext):
         reply_markup=kb.main_menu
     )
     await state.clear()
+
+@router.message(F.text == "Предложить мероприятие")
+async def propose_event(msg: Message, state: FSMContext):
+    await msg.answer("Введите название мероприятия:")
+    await state.set_state(Form.waiting_for_event_name)
+
+@router.message(Form.waiting_for_event_name)
+async def get_event_name(msg: Message, state: FSMContext):
+    await state.update_data(event_name=msg.text)
+    await msg.answer("Опишите мероприятие:")
+    await state.set_state(Form.waiting_for_event_description)
+
+@router.message(Form.waiting_for_event_description)
+async def get_event_description(msg: Message, state: FSMContext):
+    await state.update_data(event_description=msg.text)
+    await msg.answer("Укажите дату мероприятия (в формате ГГГГ-ММ-ДД):")
+    await state.set_state(Form.waiting_for_event_date)
+
+@router.message(Form.waiting_for_event_date)
+async def get_event_date(msg: Message, state: FSMContext):
+    await state.update_data(event_date=msg.text)
+    await msg.answer("Введите город мероприятия:")
+    await state.set_state(Form.waiting_for_event_city)
+
+@router.message(Form.waiting_for_event_city)
+async def get_event_city(msg: Message, state: FSMContext):
+    user_data = await state.get_data()
+    event_name = user_data['event_name']
+    event_description = user_data['event_description']
+    event_date = user_data['event_date']
+    event_city = msg.text
+
+    # Сохраняем предложение в базу данных
+    database.add_event_suggestion(
+        user_id=msg.from_user.id,
+        event_name=event_name,
+        event_description=event_description,
+        event_date=event_date,
+        event_city=event_city,
+    )
+
+    await msg.answer("Ваше мероприятие отправлено на модерацию. Спасибо!", reply_markup=kb.main_menu)
+    await state.clear()
+
+@router.message(Command("moderate"))
+async def moderate_events(msg: Message):
+    suggestions = database.get_pending_event_suggestions()
+
+    if suggestions:
+        for suggestion in suggestions:
+            event_id = suggestion['id']
+            text = f"Название: {suggestion['event_name']}\nОписание: {suggestion['event_description']}\nДата: {suggestion['event_date']}\nГород: {suggestion['event_city']}"
+            await msg.answer(
+                text,
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve_{event_id}"),
+                        InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject_{event_id}")
+                    ]
+                ])
+            )
+    else:
+        await msg.answer("Нет мероприятий для модерации.")

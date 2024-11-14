@@ -42,6 +42,22 @@ def create_tables():
         )
     ''')
 
+    # Таблица предложений мероприятий
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS event_suggestions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            event_name TEXT NOT NULL,
+            event_description TEXT NOT NULL,
+            event_date TEXT NOT NULL,
+            event_city TEXT NOT NULL,
+            is_approved INTEGER DEFAULT 0, -- 0: не проверено, 1: одобрено, -1: отклонено
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+
+
     conn.commit()
     conn.close()
 
@@ -103,5 +119,18 @@ def update_subscription(user_id, old_city, old_direction, new_city, new_directio
         WHERE user_id = ? AND city = ? AND direction = ?
     ''', (new_city, new_direction, user_id, old_city, old_direction))
     
+    conn.commit()
+    conn.close()
+    
+#Функция добавления предложений в базу данных
+def add_event_suggestion(user_id, event_name, event_description, event_date, event_city):
+    conn = create_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        INSERT INTO event_suggestions (user_id, event_name, event_description, event_date, event_city)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (user_id, event_name, event_description, event_date, event_city))
+
     conn.commit()
     conn.close()
