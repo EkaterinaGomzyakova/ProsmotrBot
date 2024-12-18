@@ -1,17 +1,15 @@
 import asyncio
 import logging
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-
-import config
-from handlers import router
-
+from fastapi import FastAPI, Request
 from dotenv import load_dotenv
-import os
 
 import database
+from handlers import router
 
 # Загружаем переменные окружения из .env файла
 load_dotenv()
@@ -21,19 +19,44 @@ API_TOKEN = os.getenv("API_TOKEN")
 if not API_TOKEN:
     raise ValueError("API_TOKEN is not set in the environment variables")
 
-# Инициализация бота
+# Инициализация бота и диспетчера
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher(storage=MemoryStorage())
+dp.include_router(router)
 
-# Инициализация диспетчера
-dp = Dispatcher(storage=MemoryStorage())  # Теперь создаем диспетчер без передачи bot сюда
+# Создаем приложение FastAPI
+app = FastAPI()
+
+# URL для webhook
+WEBHOOK_URL = f"https://your-app.onrender.com/webhook/{API_TOKEN}"  # Замените на ваш Render-домен
+
+
+# Маршрут для обработки входящих запросов от Telegram
+@app.post(f"/webhook/{API_TOKEN}")
+async def telegram_webhook(request: Request):
+    try:
+        update = await request.json()
+        await dp.feed_webhook_update(bot, update)
+        return {"ok": True}
+    except Exception as e:
+        logging.error(f"Error handling webhook: {e}")
+        return {"ok": False}
+
+
+# Устанавливаем webhook
+async def set_webhook():
+    logging.info("Setting webhook...")
+    await bot.set_webhook(WEBHOOK_URL)
+    logging.info(f"Webhook установлен: {WEBHOOK_URL}")
+
 
 # Основная асинхронная функция
 async def main():
-    bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
-    dp = Dispatcher(storage=MemoryStorage())
-    dp.include_router(router)
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    # Установка вебхука
+    await set_webhook()
+
+    # Логирование запуска
+    logging.info("Bot is up and running via webhook!")
 
 if __name__ == "__main__":
     # Создаем таблицы, если их еще нет
@@ -42,5 +65,7 @@ if __name__ == "__main__":
     # Настроим логирование
     logging.basicConfig(level=logging.INFO)
 
-    # Запускаем основной цикл событий
+    # Запускаем FastAPI сервер и устанавливаем webhook
+    import uvicorn
     asyncio.run(main())
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
