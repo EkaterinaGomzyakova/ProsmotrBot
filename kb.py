@@ -4,7 +4,6 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, KeyboardBu
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="Подписаться")],
-        [KeyboardButton(text="Настройки")],
         [KeyboardButton(text="Обратная связь")],
         [KeyboardButton(text="Подборки")],
         [KeyboardButton(text="Предложить мероприятие")],
