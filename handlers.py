@@ -39,6 +39,10 @@ async def start_handler(msg: Message, state: FSMContext):
         reply_markup=kb.main_menu  # Главное меню (ReplyKeyboardMarkup)
     )
 
+    await msg.answer_photo(
+            photo="https://disk.yandex.ru/i/H-wU5I8sueWfvw",  
+        )
+    
 # Обработчик кнопки "Подписаться"
 @router.message(F.text == "Подписаться")
 async def subscribe_handler(msg: Message, state: FSMContext):
@@ -210,3 +214,5 @@ async def moderate_events(msg: Message):
             )
     else:
         await msg.answer("Нет мероприятий для модерации.")
+
+
