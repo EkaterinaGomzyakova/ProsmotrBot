@@ -84,8 +84,8 @@ async def process_direction_selection(callback_query: CallbackQuery, state: FSMC
     )
     await state.clear()  # Сбрасываем состояние FSM
 
-# Обработчик кнопки "Мои подписки"
-@router.message(F.text == "Мои подписки")
+# Обработчик кнопки "Подписаться"
+@router.message(F.text == "Подписаться")
 async def show_subscriptions(msg: Message):
     user_id = database.get_user_id(msg.from_user.id)
     if user_id:
