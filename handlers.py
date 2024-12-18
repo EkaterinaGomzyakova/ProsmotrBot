@@ -189,6 +189,23 @@ async def get_event_city(msg: Message, state: FSMContext):
 
     await msg.answer("Ваше мероприятие отправлено на модерацию. Спасибо!", reply_markup=kb.main_menu)
     await state.clear()
+class FeedbackState(StatesGroup):
+    waiting_for_feedback = State()
+
+@router.message(F.text == "Оставить отзыв")
+async def feedback_start(msg: Message, state: FSMContext):
+    await msg.answer("Пожалуйста, напишите ваш отзыв:")
+    await state.set_state(FeedbackState.waiting_for_feedback)
+
+@router.message(FeedbackState.waiting_for_feedback)
+async def collect_feedback(msg: Message, state: FSMContext):
+    feedback = msg.text
+
+    # Сохраняем отзыв в базу данных
+    database.add_feedback(user_id=msg.from_user.id, feedback=feedback)
+
+    await msg.answer("Спасибо за ваш отзыв! Мы учтем его.", reply_markup=kb.main_menu)
+    await state.clear()
 
 @router.message(Command("moderate"))
 async def moderate_events(msg: Message):
