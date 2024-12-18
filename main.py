@@ -28,7 +28,7 @@ dp.include_router(router)
 app = FastAPI()
 
 # URL для webhook
-WEBHOOK_URL = f"https://your-app.onrender.com/webhook/{API_TOKEN}"  # Замените на ваш Render-домен
+WEBHOOK_URL = f"https://fluxeventsbot.onrender.com/{API_TOKEN}"  # Замените на ваш Render-домен
 
 
 # Маршрут для обработки входящих запросов от Telegram
