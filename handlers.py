@@ -61,7 +61,12 @@ async def subscribe_handler(msg: Message, state: FSMContext):
 async def process_city_selection(callback_query: CallbackQuery, state: FSMContext):
     city = callback_query.data.split("_")[1]  # Извлекаем название города из callback_data
     await state.update_data(city=city)  # Сохраняем выбранный город в состоянии FSM
+
+    # Отвечаем пользователю во всплывающем уведомлении
     await callback_query.answer(f"Вы выбрали город: {city}")
+
+    # Удаляем сообщение с кнопками выбора города, чтобы избежать путаницы
+    await callback_query.message.delete()
 
     # Отправляем картинку с подписью
     await callback_query.message.answer_photo(
