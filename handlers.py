@@ -70,7 +70,7 @@ async def process_city_selection(callback_query: CallbackQuery, state: FSMContex
 
     # Отправляем картинку с подписью
     await callback_query.message.answer_photo(
-        photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/main/images/directions.png",
+        photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/main/images/directions.jpg",
         caption="Теперь выберите направление:",
         reply_markup=kb.direction_menu  # Inline-кнопки с направлениями
     )
