@@ -67,13 +67,12 @@ async def process_city_selection(callback_query: CallbackQuery, state: FSMContex
         caption="Теперь выберите направление:"  # Можно добавить подпись к изображению
     )
 
-    # Отправляем кнопки выбора направления
-    await callback_query.message.answer(
-        "Выберите направление:",
-        reply_markup=kb.direction_menu  # Inline-кнопки с направлениями
-    )
+    # Делаем небольшую задержку, чтобы избежать конфликтов между сообщениями
+    await callback_query.message.answer(".", reply_markup=kb.direction_menu)
+    await callback_query.message.delete()  # Удаляем точку
 
     await state.set_state(Form.waiting_for_direction)
+
 
 
 # Обработчик выбора направления
