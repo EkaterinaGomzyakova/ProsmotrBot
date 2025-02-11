@@ -63,6 +63,13 @@ async def process_city_selection(callback_query: CallbackQuery, state: FSMContex
     await state.update_data(city=city)  # Сохраняем выбранный город в состоянии FSM
     await callback_query.answer(f"Вы выбрали город: {city}")
 
+
+    # Отправляем изображение перед выбором направления
+    await callback_query.message.answer_photo(
+        photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/main/images/directions.png",
+        caption="Теперь выберите направление:"  # Можно добавить подпись к изображению
+    )
+    
     # Отправляем новое сообщение с выбором направления, не удаляя выбор города
     await callback_query.message.reply(
         "Теперь выберите направление:",
