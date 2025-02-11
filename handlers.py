@@ -40,9 +40,9 @@ async def start_handler(msg: Message, state: FSMContext):
     )
 
     await msg.answer_photo(
-            photo="https://disk.yandex.ru/i/H-wU5I8sueWfvw",  
-        )
-    
+        photo="https://raw.githubusercontent.com/username/repository/main/images/photo.jpg"
+    )
+
 # Обработчик кнопки "Подписаться"
 @router.message(F.text == "Подписаться")
 async def subscribe_handler(msg: Message, state: FSMContext):
