@@ -42,18 +42,11 @@ async def start_handler(msg: Message, state: FSMContext):
     await msg.answer_photo(
         photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/refs/heads/main/images/city.png"
     )
+
 # Обработчик кнопки "Подписаться"
 @router.message(F.text == "Подписаться")
 async def subscribe_handler(msg: Message, state: FSMContext):
-    # Отправляем изображение перед выбором города
-    await msg.answer_photo(
-        photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/main/images/city.png",
-        caption="Выберите ваш город:"  # Можно добавить подпись к изображению
-    )
-
-    # Отправляем кнопки выбора города
-    await msg.answer("Выберите ваш город:", reply_markup=kb.city_menu)
-    
+    await msg.answer("Выберите ваш город:", reply_markup=kb.city_menu)  # Inline-кнопки с городами
     await state.set_state(Form.waiting_for_city)
 
 # Обработчик выбора города
@@ -62,16 +55,12 @@ async def process_city_selection(callback_query: CallbackQuery, state: FSMContex
     city = callback_query.data.split("_")[1]  # Извлекаем название города из callback_data
     await state.update_data(city=city)  # Сохраняем выбранный город в состоянии FSM
     await callback_query.answer(f"Вы выбрали город: {city}")
-    
-    # Отправляем изображение перед выбором направления
-    await callback_query.message.answer_photo(
-        photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/main/images/direction.png",
-        caption="Теперь выберите направление:"  # Можно добавить подпись к изображению
-    )
 
-    # Отправляем кнопки выбора направления
-    await callback_query.message.answer("Теперь выберите направление:", reply_markup=kb.direction_menu)
-    
+    # Отправляем новое сообщение с выбором направления, не удаляя выбор города
+    await callback_query.message.reply(
+        "Теперь выберите направление:",
+        reply_markup=kb.direction_menu  # Inline-кнопки с направлениями
+    )
     await state.set_state(Form.waiting_for_direction)
 
 # Обработчик выбора направления
@@ -225,3 +214,5 @@ async def moderate_events(msg: Message):
             )
     else:
         await msg.answer("Нет мероприятий для модерации.")
+
+
