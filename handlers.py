@@ -42,11 +42,18 @@ async def start_handler(msg: Message, state: FSMContext):
     await msg.answer_photo(
         photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/refs/heads/main/images/city.png"
     )
-
 # Обработчик кнопки "Подписаться"
 @router.message(F.text == "Подписаться")
 async def subscribe_handler(msg: Message, state: FSMContext):
-    await msg.answer("Выберите ваш город:", reply_markup=kb.city_menu)  # Inline-кнопки с городами
+    # Отправляем изображение перед выбором города
+    await msg.answer_photo(
+        photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/main/images/city.png",
+        caption="Выберите ваш город:"  # Можно добавить подпись к изображению
+    )
+
+    # Отправляем кнопки выбора города
+    await msg.answer("Выберите ваш город:", reply_markup=kb.city_menu)
+    
     await state.set_state(Form.waiting_for_city)
 
 # Обработчик выбора города
@@ -214,5 +221,3 @@ async def moderate_events(msg: Message):
             )
     else:
         await msg.answer("Нет мероприятий для модерации.")
-
-
