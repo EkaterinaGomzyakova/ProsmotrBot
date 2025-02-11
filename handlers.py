@@ -61,17 +61,29 @@ async def process_city_selection(callback_query: CallbackQuery, state: FSMContex
     await state.update_data(city=city)  # Сохраняем выбранный город в состоянии FSM
     await callback_query.answer(f"Вы выбрали город: {city}")
 
+    print(f"[DEBUG] Город выбран: {city}")  # Отладочный вывод в консоль
+
+    # Проверяем, корректно ли формируется меню направлений
+    if not kb.direction_menu or not isinstance(kb.direction_menu, InlineKeyboardMarkup):
+        print("[ERROR] direction_menu отсутствует или имеет неверный формат!")
+
     # Отправляем изображение перед выбором направления
     await callback_query.message.answer_photo(
         photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/main/images/direction.png",
-        caption="Теперь выберите направление:"  # Можно добавить подпись к изображению
+        caption="Теперь выберите направление:"
     )
 
-    # Делаем небольшую задержку, чтобы избежать конфликтов между сообщениями
-    await callback_query.message.answer(".", reply_markup=kb.direction_menu)
-    await callback_query.message.delete()  # Удаляем точку
+    # Пробуем отправить меню направлений с дополнительным сообщением для проверки
+    await callback_query.message.answer("ТЕСТ: Отправляю клавиатуру с направлениями...")
+    await callback_query.message.answer(
+        "Выберите направление:",
+        reply_markup=kb.direction_menu  # Inline-кнопки с направлениями
+    )
+
+    print("[DEBUG] Меню направлений отправлено!")  # Проверяем, доходит ли выполнение кода
 
     await state.set_state(Form.waiting_for_direction)
+
 
 
 
