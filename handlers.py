@@ -144,16 +144,22 @@ async def get_event_date(msg: Message, state: FSMContext):
 @router.message(Form.waiting_for_event_city)
 async def get_event_city(msg: Message, state: FSMContext, bot: Bot):
     user_data = await state.get_data()
-    
+
     event_name = user_data['event_name']
     event_description = user_data['event_description']
     event_date = user_data['event_date']
     event_city = msg.text
 
+    # Добавляем мероприятие в базу данных
     event_id = database.add_event(event_name, event_description, event_date, event_city, status="pending")
 
-    # Уведомляем админов
-    await notify_admins_about_event(bot, event_id, event_name, event_description, event_date, event_city)
-
+    # Отправляем пользователю подтверждение
     await msg.answer("✅ Ваше мероприятие отправлено на модерацию!", reply_markup=kb.main_menu)
+
+    # Уведомляем админов (добавляем обработку ошибок)
+    try:
+        await notify_admins_about_event(bot, event_id, event_name, event_description, event_date, event_city)
+    except Exception as e:
+        await msg.answer(f"⚠ Ошибка при уведомлении админов: {e}")
+
     await state.clear()
