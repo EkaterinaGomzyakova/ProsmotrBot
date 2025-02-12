@@ -1,15 +1,14 @@
 import asyncio
 import logging
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
-
-from handlers import router
-
 from dotenv import load_dotenv
-import os
 
+from handlers import router as handlers_router
+from admin import router as admin_router  # Подключаем роутер админки
 import database
 
 # Загружаем переменные окружения из .env файла
@@ -24,13 +23,13 @@ if not API_TOKEN:
 bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
 
 # Инициализация диспетчера
-dp = Dispatcher(storage=MemoryStorage())  # Теперь создаем диспетчер без передачи bot сюда
+dp = Dispatcher(storage=MemoryStorage())
 
 # Основная асинхронная функция
 async def main():
-    bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
-    dp = Dispatcher(storage=MemoryStorage())
-    dp.include_router(router)
+    dp.include_router(handlers_router)  # Подключаем обработчики пользователей
+    dp.include_router(admin_router)  # Подключаем обработчики админки
+    
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 

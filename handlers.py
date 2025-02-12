@@ -206,31 +206,4 @@ async def get_event_city(msg: Message, state: FSMContext):
     await state.clear()
 
 
-@router.message(Command("moderate"))
-async def moderate_events(msg: Message):
-    suggestions = database.get_pending_event_suggestions()
 
-    if suggestions:
-        for suggestion in suggestions:
-            event_id = suggestion['id']
-            text = f"Название: {suggestion['event_name']}\nОписание: {suggestion['event_description']}\nДата: {suggestion['event_date']}\nГород: {suggestion['event_city']}"
-            await msg.answer(
-                text,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [
-                        InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve_{event_id}"),
-                        InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject_{event_id}")
-                    ]
-                ])
-            )
-    else:
-        await msg.answer("Нет мероприятий для модерации.")
-        
-@router.message(Command("publish"))
-async def publish_event(msg: Message, state: FSMContext):
-    if msg.from_user.id not in ADMIN_IDS:
-        await msg.answer("У вас нет прав для публикации мероприятий.")
-        return
-    
-    await msg.answer("Введите название мероприятия:")
-    await state.set_state(Form.waiting_for_event_name)
