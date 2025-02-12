@@ -1,8 +1,47 @@
 import sqlite3
 
-# Функция для создания подключения к БД
+# Функция для создания подключения к БД с поддержкой именованных колонок
 def create_connection():
-    return sqlite3.connect("subscriptions.db")
+    conn = sqlite3.connect("subscriptions.db")
+    conn.row_factory = sqlite3.Row  # Доступ к колонкам по имени
+    return conn
+
+# Функция для пересоздания таблицы events с новыми именами столбцов
+def recreate_events_table():
+    conn = create_connection()
+    cursor = conn.cursor()
+
+    # Проверяем, есть ли нужные колонки
+    cursor.execute("PRAGMA table_info(events)")
+    columns = {column["name"] for column in cursor.fetchall()}
+
+    if "event_city" not in columns:  # Если нет, пересоздаем таблицу
+        print("Пересоздаем таблицу events с обновленными названиями столбцов...")
+
+        cursor.execute("ALTER TABLE events RENAME TO old_events")
+
+        cursor.execute('''
+            CREATE TABLE events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_name TEXT NOT NULL,
+                event_description TEXT,
+                event_city TEXT NOT NULL,
+                event_direction TEXT NOT NULL,
+                event_date TEXT,
+                is_approved INTEGER DEFAULT 0
+            )
+        ''')
+
+        cursor.execute('''
+            INSERT INTO events (id, event_name, event_description, event_city, event_direction, event_date, is_approved)
+            SELECT id, event_name, event_description, city, direction, event_date, is_approved FROM old_events
+        ''')
+
+        cursor.execute("DROP TABLE old_events")
+        conn.commit()
+        print("Таблица events успешно обновлена.")
+
+    conn.close()
 
 # Создание таблиц (если их нет)
 def create_tables():
@@ -21,8 +60,8 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            city TEXT NOT NULL,
-            direction TEXT NOT NULL,
+            event_city TEXT NOT NULL,
+            event_direction TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
@@ -30,11 +69,11 @@ def create_tables():
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            description TEXT,
-            city TEXT NOT NULL,
-            direction TEXT,
-            date TEXT,
+            event_name TEXT NOT NULL,
+            event_description TEXT,
+            event_city TEXT NOT NULL,
+            event_direction TEXT NOT NULL,
+            event_date TEXT,
             is_approved INTEGER DEFAULT 0
         )
     ''')
@@ -42,87 +81,30 @@ def create_tables():
     conn.commit()
     conn.close()
 
-# Добавление пользователя
-def add_user(telegram_id, full_name):
-    conn = create_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (telegram_id,))
-    if cursor.fetchone() is None:
-        cursor.execute('INSERT INTO users (telegram_id, full_name) VALUES (?, ?)', (telegram_id, full_name))
-        conn.commit()
-
-    conn.close()
-
-# Получение user_id по telegram_id
-def get_user_id(telegram_id):
-    conn = create_connection()
-    cursor = conn.cursor()
-
-    cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (telegram_id,))
-    user = cursor.fetchone()
-    conn.close()
-
-    return user[0] if user else None
-
-# Получение списка всех пользователей (для рассылки)
-def get_all_users():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT telegram_id FROM users")
-    users = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return users
-
-# Добавление подписки
-def add_subscription(telegram_id, city, direction):
-    user_id = get_user_id(telegram_id)
-    if not user_id:
-        return
-
-    conn = create_connection()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        INSERT INTO subscriptions (user_id, city, direction)
-        VALUES (?, ?, ?)
-    ''', (user_id, city, direction))
-    conn.commit()
-    conn.close()
-
-# Получение подписчиков по фильтрам
-def get_subscribers(city, direction):
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT users.telegram_id FROM subscriptions 
-        JOIN users ON subscriptions.user_id = users.id
-        WHERE subscriptions.city = ? AND subscriptions.direction = ?
-    """, (city, direction))
-    
-    subscribers = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return subscribers
+    recreate_events_table()
 
 # Добавление мероприятия
-def add_event(title, description, city, direction, date, is_approved=0):
+def add_event(event_name, event_description, event_city, event_direction, event_date, is_approved=0):
     conn = create_connection()
     cursor = conn.cursor()
 
     cursor.execute('''
-        INSERT INTO events (title, description, city, direction, date, is_approved)
+        INSERT INTO events (event_name, event_description, event_city, event_direction, event_date, is_approved)
         VALUES (?, ?, ?, ?, ?, ?)
-    ''', (title, description, city, direction, date, is_approved))
+    ''', (event_name, event_description, event_city, event_direction, event_date, is_approved))
 
+    event_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
+    return event_id
+
 # Проверка наличия мероприятия по названию
-def event_exists(title):
+def event_exists(event_name):
     conn = create_connection()
     cursor = conn.cursor()
     
-    cursor.execute('SELECT id FROM events WHERE title = ?', (title,))
+    cursor.execute('SELECT id FROM events WHERE event_name = ?', (event_name,))
     event = cursor.fetchone()
     conn.close()
     
@@ -134,35 +116,60 @@ def get_all_events():
     cursor = conn.cursor()
     
     cursor.execute("SELECT * FROM events")
-    events = cursor.fetchall()
-    
+    events = [dict(row) for row in cursor.fetchall()]  # Преобразуем в список словарей
     conn.close()
     return events
 
-# Получение мероприятий по фильтрам (город, направление)
-def get_events_by_filter(city, direction):
+# Получение мероприятий по фильтрам
+def get_events_by_filter(event_city, event_direction):
     conn = create_connection()
     cursor = conn.cursor()
     
     cursor.execute("""
         SELECT * FROM events 
-        WHERE city = ? AND direction = ? AND is_approved = 1
-    """, (city, direction))
+        WHERE event_city = ? AND event_direction = ? AND is_approved = 1
+    """, (event_city, event_direction))
     
-    events = cursor.fetchall()
+    events = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return events
+
+# Получение подписчиков по фильтрам (город + направление)
+def get_subscribers(event_city, event_direction):
+    conn = create_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT users.telegram_id FROM subscriptions 
+        JOIN users ON subscriptions.user_id = users.id
+        WHERE subscriptions.event_city = ? AND subscriptions.event_direction = ?
+    """, (event_city, event_direction))
+    
+    subscribers = [row["telegram_id"] for row in cursor.fetchall()]
+    conn.close()
+    
+    return subscribers
+
+
 
 # Подтверждение мероприятия (изменение is_approved на 1)
 def approve_event(event_id):
     conn = create_connection()
     cursor = conn.cursor()
     
-    cursor.execute("""
-        UPDATE events 
-        SET is_approved = 1 
-        WHERE id = ?
-    """, (event_id,))
+    cursor.execute("UPDATE events SET is_approved = 1 WHERE id = ?", (event_id,))
+    conn.commit()
     
+    cursor.execute("SELECT * FROM events WHERE id = ?", (event_id,))
+    event = cursor.fetchone()
+    
+    conn.close()
+    return dict(event) if event else None
+
+# Отклонение мероприятия (удаление)
+async def reject_event(event_id: int):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM events WHERE id = ?", (event_id,))
     conn.commit()
     conn.close()

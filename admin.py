@@ -84,18 +84,24 @@ async def handle_moderation(callback_query: CallbackQuery, bot: Bot):
     action, event_id = callback_query.data.split("_")
     event_id = int(event_id)
 
-    if action == "approve":
-        event = database.approve_event(event_id)
-        if event:
-            await notify_subscribers(bot, event["event_name"], event["event_description"], event["event_date"], event["event_city"], event["event_direction"])
-            await callback_query.message.edit_text(f"✅ Мероприятие '{event['event_name']}' одобрено и отправлено подписчикам.")
+    try:
+        if action == "approve":
+            event = database.approve_event(event_id)
+            if event:
+                await notify_subscribers(bot, event["event_name"], event["event_description"], event["event_date"], event["event_city"], event["event_direction"])
+                await callback_query.message.edit_text(f"✅ Мероприятие '{event['event_name']}' одобрено и отправлено подписчикам.")
+            else:
+                await callback_query.message.edit_text("⚠️ Ошибка при одобрении мероприятия.")
         else:
-            await callback_query.message.edit_text("⚠️ Ошибка при одобрении мероприятия.")
-    else:
-        database.reject_event(event_id)
-        await callback_query.message.edit_text("❌ Мероприятие отклонено.")
-
+            await database.reject_event(event_id)
+            await callback_query.message.edit_text("❌ Мероприятие отклонено.")
+    except Exception as e:
+        print(f"Ошибка при обработке мероприятия с ID {event_id}: {e}")  # Печать ошибки в терминале
+        await callback_query.message.edit_text("⚠️ Произошла ошибка при обработке мероприятия.")
+        await callback_query.answer()
+    
     await callback_query.answer()
+
 
 # Команда для публикации мероприятий
 @router.message(Command("publish"))

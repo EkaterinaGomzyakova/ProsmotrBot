@@ -162,7 +162,10 @@ async def get_event_city(msg: Message, state: FSMContext, bot: Bot):
 
     # Пробуем добавить в базу
     try:
-        event_id = database.add_event(event_name, event_description, event_date, event_city, status="pending")
+        event_id = database.add_event(event_name, event_description, event_city, "", event_date, 0)
+
+
+
         print(f"Мероприятие добавлено в БД с ID {event_id}")
     except Exception as e:
         print("Ошибка при добавлении мероприятия в БД:", e)
