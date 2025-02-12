@@ -11,6 +11,10 @@ import text
 
 import database
 
+from config import ADMIN_IDS
+
+from admin import notify_subscribers
+
 # Определяем состояния
 class Form(StatesGroup):
     waiting_for_city = State()
@@ -61,22 +65,14 @@ async def subscribe_handler(msg: Message, state: FSMContext):
 async def process_city_selection(callback_query: CallbackQuery, state: FSMContext):
     city = callback_query.data.split("_")[1]  # Извлекаем название города из callback_data
     await state.update_data(city=city)  # Сохраняем выбранный город в состоянии FSM
-
-    # Отвечаем пользователю во всплывающем уведомлении
     await callback_query.answer(f"Вы выбрали город: {city}")
 
-    # Удаляем сообщение с кнопками выбора города, чтобы избежать путаницы
-    await callback_query.message.delete()
-
-    # Отправляем картинку с подписью
-    await callback_query.message.answer_photo(
-        photo="https://raw.githubusercontent.com/EkaterinaGomzyakova/ProsmotrBot/main/images/directions.jpg",
-        caption="Теперь выберите направление:",
+    # Отправляем новое сообщение с выбором направления, не удаляя выбор города
+    await callback_query.message.reply(
+        "Теперь выберите направление:",
         reply_markup=kb.direction_menu  # Inline-кнопки с направлениями
     )
-
     await state.set_state(Form.waiting_for_direction)
-
 
 # Обработчик выбора направления
 @router.callback_query(F.data.startswith("direction_"))
@@ -229,3 +225,12 @@ async def moderate_events(msg: Message):
             )
     else:
         await msg.answer("Нет мероприятий для модерации.")
+        
+@router.message(Command("publish"))
+async def publish_event(msg: Message, state: FSMContext):
+    if msg.from_user.id not in ADMIN_IDS:
+        await msg.answer("У вас нет прав для публикации мероприятий.")
+        return
+    
+    await msg.answer("Введите название мероприятия:")
+    await state.set_state(Form.waiting_for_event_name)

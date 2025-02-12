@@ -1,15 +1,13 @@
 import sqlite3
 
-# Создание подключения к базе данных
 def create_connection():
     return sqlite3.connect("subscriptions.db")
 
-# Создание таблиц (вызывается один раз при инициализации)
+# Создание таблиц
 def create_tables():
     conn = create_connection()
     cursor = conn.cursor()
 
-    # Таблица пользователей
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,7 +16,6 @@ def create_tables():
         )
     ''')
 
-    # Таблица подписок
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,35 +25,18 @@ def create_tables():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
-    
-    # Таблица мероприятий
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             description TEXT,
             city TEXT NOT NULL,
-            type TEXT,
+            direction TEXT,
             date TEXT,
-            is_approved INTEGER DEFAULT 0  -- 0 - не одобрено, 1 - одобрено
+            is_approved INTEGER DEFAULT 0
         )
     ''')
-
-    # Таблица предложений мероприятий
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS event_suggestions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            event_name TEXT NOT NULL,
-            event_description TEXT NOT NULL,
-            event_date TEXT NOT NULL,
-            event_city TEXT NOT NULL,
-            is_approved INTEGER DEFAULT 0, -- 0: не проверено, 1: одобрено, -1: отклонено
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-    
-
 
     conn.commit()
     conn.close()
@@ -65,7 +45,7 @@ def create_tables():
 def add_user(telegram_id, full_name):
     conn = create_connection()
     cursor = conn.cursor()
-
+    
     cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (telegram_id,))
     if cursor.fetchone() is None:
         cursor.execute('INSERT INTO users (telegram_id, full_name) VALUES (?, ?)', (telegram_id, full_name))
@@ -84,8 +64,21 @@ def get_user_id(telegram_id):
 
     return user[0] if user else None
 
+# Получение списка всех пользователей (для рассылки)
+def get_all_users():
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT telegram_id FROM users")
+    users = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return users
+
 # Добавление подписки
-def add_subscription(user_id, city, direction):
+def add_subscription(telegram_id, city, direction):
+    user_id = get_user_id(telegram_id)
+    if not user_id:
+        return
+
     conn = create_connection()
     cursor = conn.cursor()
 
@@ -96,41 +89,16 @@ def add_subscription(user_id, city, direction):
     conn.commit()
     conn.close()
 
-# Получение подписок пользователя
-def get_subscriptions(user_id):
+# Получение подписчиков по фильтрам
+def get_subscribers(city, direction):
     conn = create_connection()
     cursor = conn.cursor()
-
-    cursor.execute('SELECT city, direction FROM subscriptions WHERE user_id = ?', (user_id,))
-    subscriptions = cursor.fetchall()
-    conn.close()
-
-    return subscriptions
-
-# Обновление подписки
-def update_subscription(user_id, old_city, old_direction, new_city, new_direction):
-    conn = create_connection()
-    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT users.telegram_id FROM subscriptions 
+        JOIN users ON subscriptions.user_id = users.id
+        WHERE subscriptions.city = ? AND subscriptions.direction = ?
+    """, (city, direction))
     
-    # Обновляем подписку в базе данных
-    cursor.execute('''
-        UPDATE subscriptions 
-        SET city = ?, direction = ? 
-        WHERE user_id = ? AND city = ? AND direction = ?
-    ''', (new_city, new_direction, user_id, old_city, old_direction))
-    
-    conn.commit()
+    subscribers = [row[0] for row in cursor.fetchall()]
     conn.close()
-    
-#Функция добавления предложений в базу данных
-def add_event_suggestion(user_id, event_name, event_description, event_date, event_city):
-    conn = create_connection()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-        INSERT INTO event_suggestions (user_id, event_name, event_description, event_date, event_city)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (user_id, event_name, event_description, event_date, event_city))
-
-    conn.commit()
-    conn.close()
+    return subscribers
