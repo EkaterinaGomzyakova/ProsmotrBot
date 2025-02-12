@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from handlers import router as handlers_router
 from admin import router as admin_router  # Подключаем роутер админки
+from admin import notify_admins_about_event
 import database
 
 # Загружаем переменные окружения из .env файла

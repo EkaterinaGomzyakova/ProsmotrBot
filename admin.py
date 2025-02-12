@@ -53,34 +53,30 @@ async def notify_subscribers(bot: Bot, event_name, event_description, event_date
         except Exception as e:
             print(f"Не удалось отправить сообщение {telegram_id}: {e}")
 
-# Команда для модерации мероприятий
-@router.message(Command("moderate"))
-async def moderate_events(msg: Message):
-    if not is_admin(msg.from_user.id):
-        await msg.answer("❌ У вас нет прав для выполнения этой команды.")
-        return
+# Уведомление администраторов о новом предложенном мероприятии
+async def notify_admins_about_event(bot: Bot, event_id, event_name, event_description, event_date, event_city):
+    message_text = (
+        f"📢 <b>Новое мероприятие на модерацию!</b>\n\n"
+        f"🏷 <b>Название:</b> {event_name}\n"
+        f"📝 <b>Описание:</b> {event_description}\n"
+        f"📅 <b>Дата:</b> {event_date}\n"
+        f"📍 <b>Город:</b> {event_city}\n"
+    )
 
-    suggestions = database.get_pending_event_suggestions()
+    # Кнопки для модерации
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve_{event_id}"),
+            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject_{event_id}")
+        ]
+    ])
 
-    if suggestions:
-        for suggestion in suggestions:
-            event_id = suggestion['id']
-            text = f"🏷 Название: {suggestion['event_name']}\n" \
-                   f"📝 Описание: {suggestion['event_description']}\n" \
-                   f"📅 Дата: {suggestion['event_date']}\n" \
-                   f"📍 Город: {suggestion['event_city']}"
-
-            await msg.answer(
-                text,
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [
-                        InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve_{event_id}"),
-                        InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject_{event_id}")
-                    ]
-                ])
-            )
-    else:
-        await msg.answer("⚠️ Нет мероприятий для модерации.")
+    # Отправляем сообщение всем администраторам
+    for admin_id in ADMIN_IDS:
+        try:
+            await bot.send_message(admin_id, message_text, reply_markup=keyboard, parse_mode="HTML")
+        except Exception as e:
+            print(f"Ошибка при отправке сообщения администратору {admin_id}: {e}")
 
 # Обработчик подтверждения или отклонения мероприятия
 @router.callback_query(lambda c: c.data.startswith("approve_") or c.data.startswith("reject_"))
