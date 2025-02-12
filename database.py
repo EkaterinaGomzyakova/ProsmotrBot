@@ -1,9 +1,10 @@
 import sqlite3
 
+# Функция для создания подключения к БД
 def create_connection():
     return sqlite3.connect("subscriptions.db")
 
-# Создание таблиц
+# Создание таблиц (если их нет)
 def create_tables():
     conn = create_connection()
     cursor = conn.cursor()
@@ -102,3 +103,66 @@ def get_subscribers(city, direction):
     subscribers = [row[0] for row in cursor.fetchall()]
     conn.close()
     return subscribers
+
+# Добавление мероприятия
+def add_event(title, description, city, direction, date, is_approved=0):
+    conn = create_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        INSERT INTO events (title, description, city, direction, date, is_approved)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (title, description, city, direction, date, is_approved))
+
+    conn.commit()
+    conn.close()
+
+# Проверка наличия мероприятия по названию
+def event_exists(title):
+    conn = create_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT id FROM events WHERE title = ?', (title,))
+    event = cursor.fetchone()
+    conn.close()
+    
+    return event is not None
+
+# Получение всех мероприятий
+def get_all_events():
+    conn = create_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM events")
+    events = cursor.fetchall()
+    
+    conn.close()
+    return events
+
+# Получение мероприятий по фильтрам (город, направление)
+def get_events_by_filter(city, direction):
+    conn = create_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        SELECT * FROM events 
+        WHERE city = ? AND direction = ? AND is_approved = 1
+    """, (city, direction))
+    
+    events = cursor.fetchall()
+    conn.close()
+    return events
+
+# Подтверждение мероприятия (изменение is_approved на 1)
+def approve_event(event_id):
+    conn = create_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        UPDATE events 
+        SET is_approved = 1 
+        WHERE id = ?
+    """, (event_id,))
+    
+    conn.commit()
+    conn.close()

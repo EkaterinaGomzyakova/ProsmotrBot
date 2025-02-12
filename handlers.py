@@ -9,6 +9,8 @@ import text
 import database
 from config import ADMIN_IDS
 from admin import notify_admins_about_event
+from database import add_event
+
 
 # Определяем состояния
 class Form(StatesGroup):
@@ -140,26 +142,41 @@ async def get_event_date(msg: Message, state: FSMContext):
     await state.update_data(event_date=msg.text)
     await msg.answer("Введите город мероприятия:")
     await state.set_state(Form.waiting_for_event_city)
-
+    
 @router.message(Form.waiting_for_event_city)
 async def get_event_city(msg: Message, state: FSMContext, bot: Bot):
+    print("Обработчик get_event_city вызван")  # Проверяем, что обработчик запускается
     user_data = await state.get_data()
+    print("user_data:", user_data)  # Проверяем, что данные есть
 
-    event_name = user_data['event_name']
-    event_description = user_data['event_description']
-    event_date = user_data['event_date']
+    event_name = user_data.get('event_name')
+    event_description = user_data.get('event_description')
+    event_date = user_data.get('event_date')
     event_city = msg.text
 
-    # Добавляем мероприятие в базу данных
-    event_id = database.add_event(event_name, event_description, event_date, event_city, status="pending")
+    # Проверяем, есть ли все данные
+    if not event_name or not event_description or not event_date:
+        await msg.answer("⚠ Произошла ошибка! Попробуйте начать заново.", reply_markup=kb.main_menu)
+        await state.clear()
+        return
 
-    # Отправляем пользователю подтверждение
+    # Пробуем добавить в базу
+    try:
+        event_id = database.add_event(event_name, event_description, event_date, event_city, status="pending")
+        print(f"Мероприятие добавлено в БД с ID {event_id}")
+    except Exception as e:
+        print("Ошибка при добавлении мероприятия в БД:", e)
+        await msg.answer("⚠ Ошибка при сохранении мероприятия. Попробуйте позже.")
+        return
+
     await msg.answer("✅ Ваше мероприятие отправлено на модерацию!", reply_markup=kb.main_menu)
 
-    # Уведомляем админов (добавляем обработку ошибок)
+    # Пробуем уведомить админов
     try:
         await notify_admins_about_event(bot, event_id, event_name, event_description, event_date, event_city)
+        print("Уведомление админам отправлено")
     except Exception as e:
+        print("Ошибка при уведомлении админов:", e)
         await msg.answer(f"⚠ Ошибка при уведомлении админов: {e}")
 
     await state.clear()
