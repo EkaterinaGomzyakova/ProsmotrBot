@@ -1,113 +1,149 @@
+# admin.py
+
 from aiogram import Router, Bot
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from config import ADMIN_IDS
+
 import database
+from config import ADMIN_IDS
 
 router = Router()
 
-# Проверка, является ли пользователь администратором
-def is_admin(user_id):
+def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
-# Функция рассылки подписчикам
-async def send_broadcast(text, bot: Bot):
-    subscribers = database.get_all_users()
-    for telegram_id in subscribers:
-        try:
-            await bot.send_message(telegram_id, text)
-        except Exception as e:
-            print(f"Ошибка при отправке пользователю {telegram_id}: {e}")
-
-# Команда для отправки рассылки администраторами
-@router.message(Command("broadcast"))
-async def broadcast_command(msg: Message, bot: Bot):
-    if not is_admin(msg.from_user.id):
-        await msg.answer("❌ У вас нет прав для выполнения этой команды.")
-        return
-
-    text = msg.text.replace("/broadcast", "").strip()
-    if not text:
-        await msg.answer("⚠️ Использование: /broadcast [текст рассылки]")
-        return
-
-    await msg.answer("🔄 Начинаю рассылку...")
-    await send_broadcast(text, bot)
-    await msg.answer("✅ Рассылка завершена.")
-
-# Оповещение подписчиков о мероприятии
-async def notify_subscribers(bot: Bot, event_name, event_description, event_date, event_city, event_direction):
-    subscribers = database.get_subscribers(event_city, event_direction)
-
-    message_text = f"📢 Новое мероприятие!\n\n" \
-                   f"🏷 Название: {event_name}\n" \
-                   f"📝 Описание: {event_description}\n" \
-                   f"📅 Дата: {event_date}\n" \
-                   f"📍 Город: {event_city}\n" \
-                   f"🎭 Направление: {event_direction}"
-
-    for telegram_id in subscribers:
-        try:
-            await bot.send_message(telegram_id, message_text)
-        except Exception as e:
-            print(f"Не удалось отправить сообщение {telegram_id}: {e}")
-
-# Уведомление администраторов о новом предложенном мероприятии
-async def notify_admins_about_event(bot: Bot, event_id, event_name, event_description, event_date, event_city):
-    message_text = (
+async def notify_admins_about_event(
+    bot: Bot,
+    event_id: int,
+    event_name: str,
+    event_description: str,
+    event_datetime: str,
+    event_city: str,
+    event_direction: str
+):
+    """
+    Оповестить всех администраторов о новом предложенном событии,
+    прикрепив к сообщению inline-кнопки «Одобрить»/«Отклонить».
+    """
+    text = (
         f"📢 <b>Новое мероприятие на модерацию!</b>\n\n"
         f"🏷 <b>Название:</b> {event_name}\n"
         f"📝 <b>Описание:</b> {event_description}\n"
-        f"📅 <b>Дата:</b> {event_date}\n"
+        f"🗓 <b>Дата и время:</b> {event_datetime}\n"
         f"📍 <b>Город:</b> {event_city}\n"
+        f"🎭 <b>Направление:</b> {event_direction}"
     )
-
-    # Кнопки для модерации
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve_{event_id}"),
-            InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject_{event_id}")
+            InlineKeyboardButton(text="❌ Отклонить",  callback_data=f"reject_{event_id}")
         ]
     ])
-
-    # Отправляем сообщение всем администраторам
     for admin_id in ADMIN_IDS:
         try:
-            await bot.send_message(admin_id, message_text, reply_markup=keyboard, parse_mode="HTML")
+            await bot.send_message(
+                chat_id=admin_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=keyboard
+            )
         except Exception as e:
-            print(f"Ошибка при отправке сообщения администратору {admin_id}: {e}")
+            print(f"Ошибка при отправке модерации администратору {admin_id}: {e}")
 
-# Обработчик подтверждения или отклонения мероприятия
+async def notify_subscribers(
+    bot: Bot,
+    event_name: str,
+    event_description: str,
+    event_datetime: str,
+    event_city: str,
+    event_direction: str
+):
+    """
+    Рассылает напоминание о событии всем подписчикам указанного города+направления.
+    """
+    subs = database.get_subscribers(event_city, event_direction)
+    if not subs:
+        return
+
+    text = (
+        f"📢 Напоминание о мероприятии!\n\n"
+        f"💥 {event_name}\n"
+        f"📍 {event_city} ({event_direction})\n"
+        f"🗓 {event_datetime}\n\n"
+        f"{event_description}"
+    )
+    for tg_id in subs:
+        try:
+            await bot.send_message(chat_id=tg_id, text=text)
+        except Exception as e:
+            print(f"Не удалось отправить подписчику {tg_id}: {e}")
+
+
 @router.callback_query(lambda c: c.data.startswith("approve_") or c.data.startswith("reject_"))
-async def handle_moderation(callback_query: CallbackQuery, bot: Bot):
-    action, event_id = callback_query.data.split("_")
-    event_id = int(event_id)
+async def moderation_handler(callback_query: CallbackQuery, bot: Bot):
+    action, raw_id = callback_query.data.split("_", 1)
+    event_id = int(raw_id)
 
-    try:
-        if action == "approve":
-            event = database.approve_event(event_id)
-            if event:
-                await notify_subscribers(bot, event["event_name"], event["event_description"], event["event_date"], event["event_city"], event["event_direction"])
-                await callback_query.message.edit_text(f"✅ Мероприятие '{event['event_name']}' одобрено и отправлено подписчикам.")
-            else:
-                await callback_query.message.edit_text("⚠️ Ошибка при одобрении мероприятия.")
-        else:
-            await database.reject_event(event_id)
-            await callback_query.message.edit_text("❌ Мероприятие отклонено.")
-    except Exception as e:
-        print(f"Ошибка при обработке мероприятия с ID {event_id}: {e}")  # Печать ошибки в терминале
-        await callback_query.message.edit_text("⚠️ Произошла ошибка при обработке мероприятия.")
-        await callback_query.answer()
-    
+    if not is_admin(callback_query.from_user.id):
+        return await callback_query.answer("❌ У вас нет прав на модерацию.", show_alert=True)
+
+    if action == "approve":
+        event = database.approve_event(event_id)
+        if not event:
+            await callback_query.message.edit_text("⚠️ Ошибка при одобрении.")
+            return await callback_query.answer()
+
+        # Сброс флагов, чтобы напоминания ушли по расписанию
+        database.mark_day_notified(event_id)
+        database.mark_hour_notified(event_id)
+
+        # Формируем карточку для подписчиков и админов
+        broadcast_text = (
+            f"📢 <b>Мероприятие одобрено!</b>\n\n"
+            f"💥 {event['event_name']}\n"
+            f"📍 {event['event_city']} ({event['event_direction']})\n"
+            f"🗓 {event['event_date']}\n\n"
+            f"{event['event_description']}"
+        )
+        recipients = set(database.get_subscribers(event["event_city"], event["event_direction"])) | set(ADMIN_IDS)
+        for tg_id in recipients:
+            try:
+                await bot.send_message(chat_id=tg_id, text=broadcast_text, parse_mode="HTML")
+            except Exception as e:
+                print(f"Не удалось разослать {tg_id}: {e}")
+
+        await callback_query.message.edit_text(
+            f"✅ Событие «{event['event_name']}» одобрено и разослано всем."
+        )
+
+    else:  # reject
+        database.reject_event(event_id)
+        await callback_query.message.edit_text("❌ Мероприятие отклонено.")
+
     await callback_query.answer()
 
 
-# Команда для публикации мероприятий
-@router.message(Command("publish"))
-async def publish_event(msg: Message):
+@router.message(Command("broadcast"))
+async def broadcast_command(msg: Message, bot: Bot):
+    """
+    /broadcast <текст>
+    Рассылает любое сообщение всем пользователям и администраторам.
+    """
     if not is_admin(msg.from_user.id):
-        await msg.answer("❌ У вас нет прав для выполнения этой команды.")
-        return
+        return await msg.reply("❌ У вас нет прав для этой команды.")
 
-    await msg.answer("Введите название мероприятия:")
+    text_to_send = msg.text.removeprefix("/broadcast").strip()
+    if not text_to_send:
+        return await msg.reply("⚠️ Использование: /broadcast <текст рассылки>")
+
+    await msg.reply("🔄 Начинаю рассылку…")
+
+    all_users = database.get_all_users()
+    recipients = set(all_users) | set(ADMIN_IDS)
+    for tg_id in recipients:
+        try:
+            await bot.send_message(chat_id=tg_id, text=text_to_send)
+        except Exception as e:
+            print(f"Ошибка при доставке {tg_id}: {e}")
+
+    await msg.reply("✅ Рассылка завершена.")

@@ -1,45 +1,92 @@
+# main.py
+
 import asyncio
 import logging
 import os
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.bot import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from dotenv import load_dotenv
 
-from handlers import router as handlers_router
-from admin import router as admin_router  # Подключаем роутер админки
-from admin import notify_admins_about_event
 import database
+from handlers import router as handlers_router
+from admin import router as admin_router, notify_subscribers
 
-# Загружаем переменные окружения из .env файла
+# Загрузим токен из .env
 load_dotenv()
-
-# Получаем токен из переменных окружения
 API_TOKEN = os.getenv("API_TOKEN")
 if not API_TOKEN:
-    raise ValueError("API_TOKEN is not set in the environment variables")
+    raise RuntimeError("API_TOKEN не установлен в окружении")
 
-# Инициализация бота
-bot = Bot(token=API_TOKEN, parse_mode=ParseMode.HTML)
+# Настроим логирование
+logging.basicConfig(level=logging.INFO)
 
-# Инициализация диспетчера
+# Инициализируем бота с HTML-парсингом по умолчанию
+bot = Bot(
+    token=API_TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Основная асинхронная функция
+async def reminder_loop():
+    """
+    Цикл отправки напоминаний:
+      1) За день до мероприятия (для событий, где notified_day_before == 0)
+      2) За час до мероприятия (для событий, где notified_hour_before == 0)
+    Использует готовые функции из database.py.
+    """
+    while True:
+        # Напоминания за день до
+        for evt in database.get_events_for_day_reminder():
+            try:
+                await notify_subscribers(
+                    bot,
+                    evt["event_name"],
+                    evt["event_description"],
+                    evt["event_date"],
+                    evt["event_city"],
+                    evt["event_direction"]
+                )
+                database.mark_day_notified(evt["id"])
+                logging.info(f"Sent day-before reminder for event {evt['id']}")
+            except Exception as e:
+                logging.error(f"Error sending day-before reminder for {evt['id']}: {e}")
+
+        # Напоминания за час до
+        for evt in database.get_events_for_hour_reminder():
+            try:
+                await notify_subscribers(
+                    bot,
+                    evt["event_name"],
+                    evt["event_description"],
+                    evt["event_date"],
+                    evt["event_city"],
+                    evt["event_direction"]
+                )
+                database.mark_hour_notified(evt["id"])
+                logging.info(f"Sent hour-before reminder for event {evt['id']}")
+            except Exception as e:
+                logging.error(f"Error sending hour-before reminder for {evt['id']}: {e}")
+
+        # Ждём минуту перед следующей проверкой
+        await asyncio.sleep(60)
+
 async def main():
-    dp.include_router(handlers_router)  # Подключаем обработчики пользователей
-    dp.include_router(admin_router)  # Подключаем обработчики админки
-    
+    # Убедимся, что таблицы существуют (подписки и события сохраняются между перезапусками)
+    database.create_tables()
+
+    # Подключаем роутеры
+    dp.include_router(handlers_router)
+    dp.include_router(admin_router)
+
+    # Запускаем цикл напоминаний в фоне
+    asyncio.create_task(reminder_loop())
+
+    # Запуск long-polling
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 if __name__ == "__main__":
-    # Создаем таблицы, если их еще нет
-    database.create_tables()
-
-    # Настроим логирование
-    logging.basicConfig(level=logging.INFO)
-
-    # Запускаем основной цикл событий
     asyncio.run(main())
