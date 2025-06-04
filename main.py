@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 import database
 from handlers import router as handlers_router
-from admin import router as admin_router, notify_subscribers
+from admin import router as admin_router
 
 # Загрузим токен из .env
 load_dotenv()
@@ -29,6 +29,7 @@ bot = Bot(
     default=DefaultBotProperties(parse_mode=ParseMode.HTML)
 )
 dp = Dispatcher(storage=MemoryStorage())
+
 
 async def reminder_loop():
     """
@@ -73,6 +74,7 @@ async def reminder_loop():
         # Ждём минуту перед следующей проверкой
         await asyncio.sleep(60)
 
+
 async def main():
     # Убедимся, что таблицы существуют (подписки и события сохраняются между перезапусками)
     database.create_tables()
@@ -87,6 +89,10 @@ async def main():
     # Запуск long-polling
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+
+    # После завершения polling завершаем сессию бота
+    await bot.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
