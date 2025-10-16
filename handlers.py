@@ -1,3 +1,5 @@
+# handlers.py
+
 from datetime import date, datetime
 
 from aiogram import F, Router, Bot
@@ -5,18 +7,42 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters.state import StateFilter
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import (
+    Message,
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+)
 
 from aiogram_calendar import SimpleCalendar, SimpleCalendarCallback
 
 import database
-import kb
 import text
 from admin import notify_admins_about_event, notify_subscribers
 
 router = Router()
 
+# =========================
+# ВСТРОЕННЫЕ КЛАВИАТУРЫ (перенос из kb.py)
+# =========================
+city_menu = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="Москва",           callback_data="city_Moscow")],
+    [InlineKeyboardButton(text="Санкт-Петербург", callback_data="city_Saint_Petersburg")],
+    [InlineKeyboardButton(text="Пермь",           callback_data="city_Perm")],
+    [InlineKeyboardButton(text="Екатеринбург",    callback_data="city_Ekaterinburg")],
+    [InlineKeyboardButton(text="Волгоград",       callback_data="city_Volgograd")],
+    [InlineKeyboardButton(text="Нижний Новгород", callback_data="city_Nizhny_Novgorod")],
+])
 
+direction_menu = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text="Продуктовый и UX/UI-дизайн", callback_data="direction_product")],
+    [InlineKeyboardButton(text="Комдиз",                      callback_data="direction_communication")],
+    [InlineKeyboardButton(text="Моушен-дизайн",               callback_data="direction_motion")],
+])
+
+# =========================
+# Состояния
+# =========================
 class Form(StatesGroup):
     # Подписка
     waiting_for_city_sub          = State()
@@ -37,17 +63,18 @@ class Form(StatesGroup):
 async def start_handler(msg: Message, state: FSMContext):
     database.add_user(msg.from_user.id, msg.from_user.full_name)
     await state.clear()
+    # Предложим сразу подписаться через /subscribe
     await msg.answer(
-        text.greet.format(name=msg.from_user.full_name),
-        reply_markup=kb.main_menu
+        text.greet.format(name=msg.from_user.full_name) +
+        "\n\nЧтобы получать подборки событий — используйте команду /subscribe"
     )
 
 
 # — Подписка —
-@router.message(F.text == "⭐ Мои подписки")
+@router.message(Command("subscribe"))
 async def subscribe_start(msg: Message, state: FSMContext):
     database.add_user(msg.from_user.id, msg.from_user.full_name)
-    await msg.answer("Выберите город для подписки:", reply_markup=kb.city_menu)
+    await msg.answer("Выберите город для подписки:", reply_markup=city_menu)
     await state.set_state(Form.waiting_for_city_sub)
 
 
@@ -56,7 +83,7 @@ async def sub_city(callback: CallbackQuery, state: FSMContext):
     city = callback.data.split("_", 1)[1]
     await state.update_data(city=city)
     await callback.answer(f"Город: {city}")
-    await callback.message.answer("Теперь направление:", reply_markup=kb.direction_menu)
+    await callback.message.answer("Теперь направление:", reply_markup=direction_menu)
     await state.set_state(Form.waiting_for_direction_sub)
 
 
@@ -67,16 +94,15 @@ async def sub_direction(callback: CallbackQuery, state: FSMContext):
     database.add_subscription(callback.from_user.id, data["city"], direction)
     await callback.answer(f"Подписка: {data['city']} — {direction}")
     await callback.message.answer(
-        "Буду напоминать за день и за час до события.",
-        reply_markup=kb.main_menu
+        "Готово! Буду напоминать за день и за час до события."
     )
     await state.clear()
 
 
 # — Ручной поиск —
-@router.message(F.text == "🔍 Найти мероприятия")
+@router.message(Command("pack"))
 async def search_start(msg: Message, state: FSMContext):
-    await msg.answer("Выберите город для поиска:", reply_markup=kb.city_menu)
+    await msg.answer("Выберите город для поиска:", reply_markup=city_menu)
     await state.set_state(Form.waiting_for_city_search)
 
 
@@ -85,7 +111,7 @@ async def search_city(callback: CallbackQuery, state: FSMContext):
     city = callback.data.split("_", 1)[1]
     await state.update_data(search_city=city)
     await callback.answer(f"Город: {city}")
-    await callback.message.answer("Теперь направление:", reply_markup=kb.direction_menu)
+    await callback.message.answer("Теперь направление:", reply_markup=direction_menu)
     await state.set_state(Form.waiting_for_direction_search)
 
 
@@ -97,7 +123,7 @@ async def search_direction(callback: CallbackQuery, state: FSMContext):
     events    = database.get_events_by_filter(city, direction)
 
     if not events:
-        await callback.message.answer("Ничего не найдено.", reply_markup=kb.main_menu)
+        await callback.message.answer("Ничего не найдено.")
     else:
         for evt in events:
             photo = evt.get("image_url") or text.default_event_image
@@ -108,16 +134,15 @@ async def search_direction(callback: CallbackQuery, state: FSMContext):
                 f"Описание:\n{evt['event_description']}"
             )
             await callback.message.answer_photo(photo=photo, caption=caption)
-        await callback.message.answer("Возвращаюсь в меню.", reply_markup=kb.main_menu)
 
     await state.clear()
 
 
 # — Предложить событие —
-@router.message(F.text == "➕ Предложить мероприятие")
+@router.message(Command("add"))
 async def propose_start(msg: Message, state: FSMContext):
     database.add_user(msg.from_user.id, msg.from_user.full_name)
-    await msg.answer("Выберите направление события:", reply_markup=kb.direction_menu)
+    await msg.answer("Выберите направление события:", reply_markup=direction_menu)
     await state.set_state(Form.waiting_for_event_direction)
 
 
@@ -126,7 +151,7 @@ async def propose_direction(callback: CallbackQuery, state: FSMContext):
     direction = callback.data.split("_", 1)[1]
     await state.update_data(event_direction=direction)
     await callback.answer(f"Направление: {direction}")
-    await callback.message.answer("Теперь город мероприятия:", reply_markup=kb.city_menu)
+    await callback.message.answer("Теперь город мероприятия:", reply_markup=city_menu)
     await state.set_state(Form.waiting_for_event_city)
 
 
@@ -165,7 +190,6 @@ async def process_calendar(
     if not selected:
         return
 
-    # Normalize to date
     picked_date = picked.date() if isinstance(picked, datetime) else picked
 
     if picked_date < date.today():
@@ -191,7 +215,7 @@ async def process_event_time(msg: Message, state: FSMContext, bot: Bot):
     try:
         h, m = map(int, time_text.split(":"))
         assert 0 <= h < 24 and 0 <= m < 60
-    except:
+    except Exception:
         return await msg.answer("❌ Неверный формат времени. Введите ЧЧ:ММ.")
 
     data = await state.get_data()
@@ -212,7 +236,7 @@ async def process_event_time(msg: Message, state: FSMContext, bot: Bot):
         is_approved=0
     )
 
-    # Notify admin about new event, including direction
+    # Уведомляем админов об одном конкретном событии
     await notify_admins_about_event(
         bot=bot,
         event_id=eid,
@@ -224,8 +248,7 @@ async def process_event_time(msg: Message, state: FSMContext, bot: Bot):
     )
 
     await msg.answer(
-        "✅ Событие отправлено на модерацию. После одобрения я сообщу подписчикам.",
-        reply_markup=kb.main_menu
+        "✅ Событие отправлено на модерацию. После одобрения я сообщу подписчикам."
     )
 
     await state.clear()
